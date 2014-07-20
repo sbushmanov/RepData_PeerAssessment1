@@ -1,20 +1,266 @@
 # Reproducible Research: Peer Assessment 1
 
+This is an analysis of two month worth data of number of steps taken by an individual and recorded throughout a day in 5 minute intervals.
+
+The raw data are in the zipped `csv` file containing 17,568 observations recorded in three columns:
+
+1. **steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+2. **date**: The date on which the measurement was taken in YYYY-MM-DD format
+
+3. **interval**: Identifier for the 5-minute interval in which measurement was taken
+
 
 ## Loading and preprocessing the data
 
+First load the data stored in `activity.zip` into R via `read.csv`.
 
+To read data properly I explicitely specify class of the `date` column as `Date` via `colClasses = ` parameter: 
+
+```{r}
+activity <- read.csv(unz("activity.zip", "activity.csv"),
+                     colClasses = c("date" = "Date"),
+                     header = T)
+```
+
+As a result, I have `activity` object of `"data.frame"` class, whith column classes:
+
+```{r}
+sapply(activity, class)
+
+```
+
+Now `interval` column, which is of `"integer"` class, has breaks after 12th interval
+each hour, e.g. see pattern around 1 AM:
+
+```{r}
+activity[10:14,]
+
+```
+
+If left "as is", the data set will result in graphs with artifactual gaps 
+before each new hour:
+
+```{r warning=FALSE}
+require(ggplot2)
+ggplot(data=activity, aes(x=interval, y=steps)) +
+        geom_point(alpha=.25) +
+        labs(title = "Scatterplot for data with gaps")
+```
+
+To account for this problem, I convert `interval` column to `"factor"` class, while 
+explicitely ordering factor levels:
+
+```{r}
+lev <- as.character(seq(0,2355,5))
+activity$interval <- factor(activity$interval, levels = lev)
+activity <- droplevels(activity)
+```
+
+Now the artifact disappears:
+
+```{r warning =FALSE}
+ggplot(data=activity, aes(x=interval, y=steps)) +
+        geom_point(alpha =.2) +
+        scale_x_discrete(breaks = as.character(seq(500,2500,500))) +
+        labs(title = "Scatterplot for data without gaps")
+
+```
+
+Now I have tidy preprocessed data ready for further analysis.
 
 ## What is mean total number of steps taken per day?
 
+Throughout the rest of the analysis I use `plyr` and `ggplot2` packages by Hadley Wickham. `Plyr` package is a friendly substitute for base R's "apply" family of functions, which is built with "split, apply, combine" workflow philosophy in mind. `ggplot2` is R implementation of grammar of graphics. Both packages can be installed from CRAN.
+
+```{r}
+require(plyr)
+require(ggplot2)
+```
+
+Drawing histogram distribution of total steps per day takes two steps:
+
+1. Calculate a new data frame object `total.steps` with two columns: `date` and `total.steps.day`. This is done with the help of `ddply` function from `plyr` package:
+
+```{r}
+total.steps <- ddply(activity, 
+                     "date", 
+                     summarize, 
+                     tot.steps.day = sum(steps, na.rm = T))
+```
+
+The meaning of the parameters is as follows:
+
+* `activity` - variable of `"data.frame"` (df) class to summarize  
+* `"date"` - variable over unique values of which df will be split  
+* `summarize` - type of function to apply to splitted parts of df  
+* `tot.steps.day` - summary variable to calculate on splitted df 
+
+2. Plot histogram of total steps per day with the help of `ggplot2` package adjusting some default parameters:
+
+```{r}
+
+ggplot(data = total.steps, aes(x=tot.steps.day)) +
+        geom_histogram(col="grey60",
+                       fill = "grey80",
+                       binwidth = 1000,
+                       origin = -500) +
+        scale_y_continuous(breaks = seq(2,10,2)) +
+        labs(title = "Histogram of total steps per day",
+             x = "Total steps per day",
+             y = "Count")
+```
+
+
+Mean of total steps per day is calculated as follows:
+
+```{r}
+mean(total.steps$tot.steps.day)
+```
+
+
+Median of total steps per day is calculated as follows:
+
+```{r}
+median(total.steps$tot.steps.day)
+
+```
 
 
 ## What is the average daily activity pattern?
 
+To make a line plot of steps taken per interval averaged over two month period I first have to calculate `activity.pattern` object of class `"data.frame"` consisting of two columns: interval and average number of steps per interval. With the help of plyr:
 
+```{r}
+activity.average <- ddply(activity,
+                          "interval",
+                          summarize,
+                          avg.steps = mean(steps, na.rm=T))
+```
+
+Then, make a plot of mean steps per interval:
+
+```{r}
+ggplot(data=activity.average) +
+        geom_line(aes(x=interval, y = avg.steps, group=1)) +
+        scale_x_discrete(breaks = as.character(seq(300,2400,300))) +
+        labs(title="Daily Activity Pattern",
+             x="Time Interval",
+             y="Average Number of Steps")
+
+```
+
+Calculate which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+n <- which.max(activity.average$avg.steps)
+activity.average[n, ]
+```
+
+Interval on average containing maximum number of steps is `r as.character(activity.average[n, "interval"])`
 
 ## Imputing missing values
 
+Total number of rows with missing data:
+
+```{r}
+na.vector <- is.na(activity$steps)
+sum(na.vector)
+```
+
+The strategy for imputing missing data:
+* substitute missing data by average of existing records over the same
+time interval
+
+```{r}
+
+# create a df of the same # of rows as original activity dataset
+# with additional column representing averages over interval
+impute <- ddply(activity,
+                "interval",
+                transform,
+                avg.steps = mean(steps, na.rm=T))
+# rearrange df first by date second by interval
+impute <- arrange(impute, date, interval)
+# loop through the copy of original df and substitute missing values
+# by calculated averages
+activity.imputed <- activity
+activity.imputed$steps <- ifelse(na.vector,
+                                 impute$avg.steps,
+                                 activity$steps)
+```
+
+To make a histogram with imputed data I need to calculte a new `"data.frame"` 
+containing columns for date and total number of steps per date
+
+```{r}
+total.steps.imputed <- ddply(activity.imputed,
+                             "date",
+                             summarize,
+                             total.steps=sum(steps))
+
+```
+
+Plotting a histogram with imputed data:
+
+```{r}
+ggplot(data=total.steps.imputed, aes(x=total.steps)) +
+        geom_histogram(col="grey60",
+                       fill = "grey80",
+                       binwidth = 1000,
+                       origin = -500) +
+        scale_y_continuous(breaks = seq(2,16,2)) +
+        labs(title = "Histogram of total steps per day\n with imputed data",
+             x = "Total steps per day \n(imputed data)",
+             y = "Count")
+
+```
+
+Calculating mean of imputed activity data:
+
+```{r}
+mean(total.steps.imputed$total.steps)
+
+```
+
+Calculating median of imputed activity data:
+
+```{r}
+median(total.steps.imputed$total.steps)
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r}
+head(weekdays(activity.imputed$date))
+activity.imputed$day <- ifelse(weekdays(activity.imputed$date) == "Saturday" |
+                               weekdays(activity.imputed$date) ==  "Sunday",
+                               "weekend",
+                               "weekday")
+activity.imputed$day <- factor(activity.imputed$day, levels = c("weekday", "weekend"))
+```
+
+
+Prepare data 
+
+```{r}
+activity.imputed.average <- ddply(activity.imputed,
+                                  c("interval", "day"),
+                                  summarize,
+                                  avg.steps = mean(steps))
+
+```
+
+Plot histogram
+
+```{r}
+ggplot(data=activity.imputed.average) +
+        geom_line(aes(x=interval, y=avg.steps, group=day))  +
+        facet_grid(day~.) +
+        scale_x_discrete(breaks = as.character(seq(300,2400,300))) +
+        labs(title="Daily Activity Pattern \non/off weekend",
+             x="Time Interval",
+             y="Average Number of Steps")
+
+```
