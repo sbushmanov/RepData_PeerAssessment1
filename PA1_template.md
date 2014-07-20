@@ -1,4 +1,5 @@
-```{r}
+
+```r
 options(scipen = 1, digits = 2)
 ```
 
@@ -26,7 +27,8 @@ First load the data stored in `activity.zip` into R via `read.csv`.
 
 To read data properly I explicitly specify class of the `date` column as `"Date"` via `colClasses = ` parameter: 
 
-```{r}
+
+```r
 activity <- read.csv(unz("activity.zip", "activity.csv"),
                      colClasses = c("date" = "Date"),
                      header = T)
@@ -34,23 +36,38 @@ activity <- read.csv(unz("activity.zip", "activity.csv"),
 
 As a result, I have `activity` object of `"data.frame"` class, with column classes:
 
-```{r}
-sapply(activity, class)
 
+```r
+sapply(activity, class)
+```
+
+```
+##     steps      date  interval 
+## "integer"    "Date" "integer"
 ```
 
 Now `interval` column, which is of `"integer"` class, has breaks after 12th interval
 each hour, e.g. see pattern around 1 AM:
 
-```{r}
-activity[10:14,]
 
+```r
+activity[10:14,]
+```
+
+```
+##    steps       date interval
+## 10    NA 2012-10-01       45
+## 11    NA 2012-10-01       50
+## 12    NA 2012-10-01       55
+## 13    NA 2012-10-01      100
+## 14    NA 2012-10-01      105
 ```
 
 If left "as is", the data set will result in graphs with artifactual gaps 
 before beginning of each new hour:
 
-```{r data_with_gaps, warning=FALSE}
+
+```r
 require(ggplot2)
 ggplot(data=activity, aes(x=interval, y=steps)) +
         geom_point(alpha=.25) + # account for overplotting
@@ -58,10 +75,13 @@ ggplot(data=activity, aes(x=interval, y=steps)) +
              x="Time interval identifier")
 ```
 
+![plot of chunk data_with_gaps](figure/data_with_gaps.png) 
+
 One of the possible ways to cure this problem is to convert `interval` 
 column to `"factor"` class, while **explicitly setting the order** of factor levels:
 
-```{r}
+
+```r
 lev <- as.character(seq(0,2355,5))
 activity$interval <- factor(activity$interval, levels = lev)
 activity <- droplevels(activity)
@@ -69,14 +89,16 @@ activity <- droplevels(activity)
 
 Now the artifacts disappear:
 
-```{r data_without_gaps, warning =FALSE}
+
+```r
 ggplot(data=activity, aes(x=interval, y=steps)) +
         geom_point(alpha =.2) +
         scale_x_discrete(breaks = as.character(seq(500,2500,500))) +
         labs(title = "Scatterplot for activity data \n without gaps",
              x="Time interval identifier")
-
 ```
+
+![plot of chunk data_without_gaps](figure/data_without_gaps.png) 
 
 Now that I have tidy preprocessed data set `activity` I can proceed to further analysis.
 
@@ -88,7 +110,8 @@ R's "apply" family of functions, which is built with "split, apply, combine"
 workflow philosophy in mind. `ggplot2` is Hadley's R implementation 
 of grammar of graphics from Wilkinson. Both packages can be installed from CRAN.
 
-```{r}
+
+```r
 require(plyr)
 require(ggplot2)
 ```
@@ -99,7 +122,8 @@ Drawing histogram distribution of total steps per day takes two steps:
 `date` and `total.steps.day`. This is done with the help of `ddply` 
 function from `plyr` package:
 
-```{r}
+
+```r
 total.steps <- ddply(activity, 
                      "date", 
                      summarize, 
@@ -116,8 +140,8 @@ The meaning of the parameters is as follows:
 2. Plot histogram of total steps per day with the help of `ggplot2` package 
 while adjusting some default parameters:
 
-```{r histogram_with_na}
 
+```r
 ggplot(data = total.steps, aes(x=tot.steps.day)) +
         geom_histogram(col="grey60",
                        fill = "grey80",
@@ -129,26 +153,38 @@ ggplot(data = total.steps, aes(x=tot.steps.day)) +
              y = "Count")
 ```
 
+![plot of chunk histogram_with_na](figure/histogram_with_na.png) 
+
 Two days that are counted in "0" bin are actually days with 127 and 42 steps. Days
 with missing values (`NA`) are **ignored** (not counted as 0).
 
 Mean of total steps per day is calculated as follows:
 
-```{r}
+
+```r
 mean.steps <- mean(total.steps$tot.steps.day, na.rm=T)
 mean.steps
 ```
 
-Thus the mean number of total steps per day is `r mean.steps`
+```
+## [1] 10767
+```
+
+Thus the mean number of total steps per day is 10767.19
 
 Median of total steps per day is calculated as follows:
 
-```{r}
+
+```r
 median.steps <- median(total.steps$tot.steps.day, na.rm=T)
 median.steps
 ```
 
-Thus the median number of total steps per day is `r median.steps`
+```
+## [1] 10766
+```
+
+Thus the median number of total steps per day is 10766
 
 
 ## What is the average daily activity pattern?
@@ -158,7 +194,8 @@ I first have to calculate `activity.pattern` object of class `"data.frame"`
 consisting of two columns: interval and average number of steps per interval. 
 With the help of plyr:
 
-```{r}
+
+```r
 activity.average <- ddply(activity,
                           "interval",
                           summarize,
@@ -167,38 +204,51 @@ activity.average <- ddply(activity,
 
 Then, make a plot of mean steps per interval:
 
-```{r average_daily_activity}
+
+```r
 ggplot(data=activity.average) +
         geom_line(aes(x=interval, y = avg.steps, group=1)) +
         scale_x_discrete(breaks = as.character(seq(300,2400,300))) +
         labs(title="Average Daily Activity Pattern",
              x="Time interval identifier",
              y="Average Number of Steps")
-
 ```
+
+![plot of chunk average_daily_activity](figure/average_daily_activity.png) 
 
 Calculate which 5-minute interval, on average across all the days in the dataset, 
 contains the maximum number of steps?
 
-```{r}
+
+```r
 n <- which.max(activity.average$avg.steps)
 activity.average[n, ]
 ```
 
+```
+##     interval avg.steps
+## 104      835       206
+```
+
 Interval on average containing maximum number of steps 
-is `r as.character(activity.average[n, "interval"])`
+is 835
 
 ## Imputing missing values
 
 Calculate total number of rows with missing data:
 
-```{r}
+
+```r
 na.vector <- is.na(activity$steps)
 mis.rows <- sum(na.vector)
 mis.rows
 ```
 
-Thus the number of rows with missing data is `r mis.rows`
+```
+## [1] 2304
+```
+
+Thus the number of rows with missing data is 2304
 
 
 The strategy for imputing missing data:
@@ -208,7 +258,8 @@ time interval
 To do so, I first create a df of the same # of rows as original activity dataset
 with additional column representing averages over interval
 
-```{r}
+
+```r
 impute <- ddply(activity,
                 "interval",
                 transform,
@@ -220,7 +271,8 @@ impute <- arrange(impute, date, interval)
 And then I loop through the copy of original df and substitute missing values 
 by calculated averages
 
-```{r}
+
+```r
 activity.imputed <- activity
 activity.imputed$steps <- ifelse(na.vector,
                                  impute$avg.steps,
@@ -230,7 +282,8 @@ activity.imputed$steps <- ifelse(na.vector,
 To make a histogram with imputed data I need to calculte a new `"data.frame"` 
 containing columns for date and total number of steps per date:
 
-```{r}
+
+```r
 total.steps.imputed <- ddply(activity.imputed,
                              "date",
                              summarize,
@@ -239,7 +292,8 @@ total.steps.imputed <- ddply(activity.imputed,
 
 Plotting a histogram with imputed data:
 
-```{r histogram_with_imputed}
+
+```r
 ggplot(data=total.steps.imputed, aes(x=total.steps)) +
         geom_histogram(col="grey60",
                        fill = "grey80",
@@ -251,38 +305,77 @@ ggplot(data=total.steps.imputed, aes(x=total.steps)) +
              y = "Count")
 ```
 
+![plot of chunk histogram_with_imputed](figure/histogram_with_imputed.png) 
+
 Calculating mean of imputed activity data:
 
-```{r}
+
+```r
 mean.steps.imp <- mean(total.steps.imputed$total.steps)
 mean.steps.imp
 ```
 
-Thus, mean total number of steps per day with imputed data is `r mean.steps.imp`
+```
+## [1] 10766
+```
+
+Thus, mean total number of steps per day with imputed data is 10766.19
 
 Calculating median of imputed activity data:
 
-```{r}
+
+```r
 median.steps.imp <- median(total.steps.imputed$total.steps)
 median.steps.imp
 ```
 
-Thus, median total number of steps per day with imputed data is `r median.steps.imp`
+```
+## [1] 10766
+```
+
+Thus, median total number of steps per day with imputed data is 10766.19
 
 Mean and median from imputed data varies very little from those of original data:
 
-```{r}
+
+```r
 mean.var <- mean.steps.imp - mean.steps
 mean.var
+```
+
+```
+## [1] -1
+```
+
+```r
 median.var <- median.steps.imp - median.steps
 median.var
+```
+
+```
+## [1] 0.19
 ```
 
 To test if the change in means statistically significan let's perform 
 a t-test for difference in means
 
-```{r}
+
+```r
 t.test(total.steps.imputed$total.steps, total.steps$tot.steps.day)
+```
+
+```
+## 
+## 	Welch Two Sample t-test
+## 
+## data:  total.steps.imputed$total.steps and total.steps$tot.steps.day
+## t = -0.0013, df = 107, p-value = 0.999
+## alternative hypothesis: true difference in means is not equal to 0
+## 95 percent confidence interval:
+##  -1540  1538
+## sample estimates:
+## mean of x mean of y 
+##     10766     10767
 ```
 
 The results of the test tells us that given the amount of data, imputation of
@@ -302,7 +395,8 @@ comparign means, but after comparing the shape of the distributions:
 Create a new factor variable in the dataset with two levels – “weekday” and “weekend”
 indicating whether a given date is a weekday or weekend day.
 
-```{r}
+
+```r
 activity.imputed$day <- ifelse(weekdays(activity.imputed$date) == "Saturday" |
                                weekdays(activity.imputed$date) ==  "Sunday",
                                "weekend",
@@ -312,7 +406,8 @@ activity.imputed$day <- factor(activity.imputed$day, levels = c("weekday", "week
 
 Before we can plot, we have first to aggregate data within each categorical
 variable of interest:
-```{r}
+
+```r
 activity.imputed.average <- ddply(activity.imputed,
                                   c("interval", "day"),
                                   summarize,
@@ -323,7 +418,8 @@ Make a panel plot containing a time series plot (i.e. `type = "l"` )
 of the 5-minute interval (x-axis) and the average number of steps taken, 
 averaged across all weekday days or weekend days (y-axis).
 
-```{r activity_weekay_vs_weekend}
+
+```r
 ggplot(data=activity.imputed.average) +
         geom_line(aes(x=interval, y=avg.steps, group=day))  +
         facet_grid(day~.) +
@@ -332,6 +428,8 @@ ggplot(data=activity.imputed.average) +
              x="Time interval identifier",
              y="Average Number of Steps")
 ```
+
+![plot of chunk activity_weekay_vs_weekend](figure/activity_weekay_vs_weekend.png) 
 
 Differences in activity patterns between weekdays and weekends:
 
